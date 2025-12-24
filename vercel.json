@@ -1,0 +1,12 @@
+{
+  "projects": [
+    {
+      "name": "n8n-inngest-frontend",
+      "root": "frontend"
+    },
+    {
+      "name": "n8n-inngest-api",
+      "root": "."
+    }
+  ]
+}
