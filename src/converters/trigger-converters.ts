@@ -45,6 +45,10 @@ export function convertTrigger(
       return convertErrorTrigger(node, context);
     case '@n8n/n8n-nodes-langchain.chatTrigger':
       return convertChatTrigger(node, context);
+    case 'n8n-nodes-base.googleDriveTrigger':
+      return convertGoogleDriveTrigger(node, context);
+    case 'n8n-nodes-base.googleSheetsTrigger':
+      return convertGoogleSheetsTrigger(node, context);
     default:
       return convertGenericTrigger(node, context);
   }
@@ -231,6 +235,85 @@ function convertChatTrigger(
 }
 
 /**
+ * Convert Google Drive Trigger to polling-based event trigger
+ */
+function convertGoogleDriveTrigger(
+  node: ParsedNode,
+  context: ConversionContext
+): TriggerConversionResult {
+  const params = node.parameters as any;
+  const event = params.event || 'fileCreated';
+  const pollInterval = params.pollTimes?.item?.[0]?.mode || 'everyMinute';
+
+  // Convert to cron based on poll interval
+  let cronExpression = '* * * * *'; // Every minute by default
+  if (pollInterval === 'everyHour') {
+    cronExpression = '0 * * * *';
+  } else if (pollInterval === 'everyDay') {
+    cronExpression = '0 0 * * *';
+  }
+
+  const eventName = `${context.options.eventPrefix || 'google-drive'}/${event}`;
+
+  return {
+    config: {
+      id: `google-drive-${toStepId(context.workflowName)}`,
+      name: `Google Drive: ${context.workflowName}`,
+    },
+    trigger: {
+      type: 'cron',
+      cron: cronExpression,
+    },
+    eventTypeDef: generateEventTypeDef(eventName, {
+      id: 'string',
+      name: 'string',
+      mimeType: 'string',
+      createdTime: 'string',
+      modifiedTime: 'string',
+    }),
+  };
+}
+
+/**
+ * Convert Google Sheets Trigger to polling-based event trigger
+ */
+function convertGoogleSheetsTrigger(
+  node: ParsedNode,
+  context: ConversionContext
+): TriggerConversionResult {
+  const params = node.parameters as any;
+  const event = params.event || 'rowAdded';
+  const pollInterval = params.pollTimes?.item?.[0]?.mode || 'everyMinute';
+
+  // Convert to cron based on poll interval
+  let cronExpression = '* * * * *'; // Every minute by default
+  if (pollInterval === 'everyHour') {
+    cronExpression = '0 * * * *';
+  } else if (pollInterval === 'everyDay') {
+    cronExpression = '0 0 * * *';
+  }
+
+  const eventName = `${context.options.eventPrefix || 'google-sheets'}/${event}`;
+
+  return {
+    config: {
+      id: `google-sheets-${toStepId(context.workflowName)}`,
+      name: `Google Sheets: ${context.workflowName}`,
+    },
+    trigger: {
+      type: 'cron',
+      cron: cronExpression,
+    },
+    eventTypeDef: generateEventTypeDef(eventName, {
+      spreadsheetId: 'string',
+      sheetId: 'string',
+      row: 'Record<string, unknown>',
+      rowNumber: 'number',
+    }),
+  };
+}
+
+/**
  * Convert generic/unknown trigger to event-based trigger
  */
 function convertGenericTrigger(
@@ -387,12 +470,16 @@ ${fields}
 }
 
 /**
- * Convert event name to TypeScript type name
+ * Convert event name to TypeScript type name (PascalCase)
  */
 function eventNameToTypeName(eventName: string): string {
   return eventName
-    .split(/[/.]/)
-    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    // Split on slashes, dots, hyphens, underscores, and spaces
+    .split(/[/.\-_\s]+/)
+    // Remove empty strings
+    .filter(part => part.length > 0)
+    // Convert each part to PascalCase
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
     .join('');
 }
 

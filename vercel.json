@@ -1,12 +1,19 @@
 {
-  "projects": [
+  "version": 2,
+  "builds": [
     {
-      "name": "n8n-inngest-frontend",
-      "root": "frontend"
+      "src": "api/**/*.ts",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/$1"
     },
     {
-      "name": "n8n-inngest-api",
-      "root": "."
+      "src": "/(.*)",
+      "dest": "/api/index"
     }
   ]
 }

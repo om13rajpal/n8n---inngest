@@ -1714,6 +1714,150 @@ export const slackConverter: NodeConverter = {
   },
 };
 
+/**
+ * Edit Image Node Converter
+ * Converts n8n editImage node to Inngest step with image processing
+ */
+export const editImageConverter: NodeConverter = {
+  nodeTypes: ['n8n-nodes-base.editImage'],
+
+  convert(node: ParsedNode, context: ConversionContext): ConversionResult {
+    const params = node.parameters as any;
+    const stepId = toStepId(node.name);
+    const varName = toVariableName(node.name);
+    const dataAccess = generateDataAccess(node, context);
+
+    context.variableMap.set(node.name, varName);
+
+    const operation = params.operation || 'information';
+
+    let code: string;
+    const additionalImports: string[] = ['sharp'];
+
+    switch (operation) {
+      case 'information':
+        code = `
+    // Get image information
+    const ${varName} = await step.run("${stepId}", async () => {
+      const imageBuffer = Buffer.from(${dataAccess}.data, 'base64');
+      const image = sharp(imageBuffer);
+      const metadata = await image.metadata();
+
+      return {
+        width: metadata.width,
+        height: metadata.height,
+        format: metadata.format,
+        size: metadata.size,
+        space: metadata.space,
+        channels: metadata.channels,
+        depth: metadata.depth,
+        density: metadata.density,
+        hasAlpha: metadata.hasAlpha,
+        orientation: metadata.orientation,
+      };
+    });
+`.trim();
+        break;
+
+      case 'crop':
+        const left = params.cropPositionX || 0;
+        const top = params.cropPositionY || 0;
+        const width = params.width || 100;
+        const height = params.height || 100;
+
+        code = `
+    // Crop image
+    const ${varName} = await step.run("${stepId}", async () => {
+      const imageBuffer = Buffer.from(${dataAccess}.data, 'base64');
+      const croppedBuffer = await sharp(imageBuffer)
+        .extract({ left: ${left}, top: ${top}, width: ${width}, height: ${height} })
+        .toBuffer();
+
+      return {
+        data: croppedBuffer.toString('base64'),
+        mimeType: 'image/png',
+      };
+    });
+`.trim();
+        break;
+
+      case 'resize':
+        const resizeWidth = params.width || 100;
+        const resizeHeight = params.height || 100;
+        const resizeOption = params.resizeOption || 'maximumArea';
+
+        code = `
+    // Resize image
+    const ${varName} = await step.run("${stepId}", async () => {
+      const imageBuffer = Buffer.from(${dataAccess}.data, 'base64');
+      const resizedBuffer = await sharp(imageBuffer)
+        .resize(${resizeWidth}, ${resizeHeight}, {
+          fit: '${resizeOption === 'maximumArea' ? 'inside' : 'cover'}'
+        })
+        .toBuffer();
+
+      return {
+        data: resizedBuffer.toString('base64'),
+        mimeType: 'image/png',
+      };
+    });
+`.trim();
+        break;
+
+      case 'rotate':
+        const angle = params.rotate || 0;
+
+        code = `
+    // Rotate image
+    const ${varName} = await step.run("${stepId}", async () => {
+      const imageBuffer = Buffer.from(${dataAccess}.data, 'base64');
+      const rotatedBuffer = await sharp(imageBuffer)
+        .rotate(${angle})
+        .toBuffer();
+
+      return {
+        data: rotatedBuffer.toString('base64'),
+        mimeType: 'image/png',
+      };
+    });
+`.trim();
+        break;
+
+      case 'composite':
+        code = `
+    // Composite image
+    const ${varName} = await step.run("${stepId}", async () => {
+      // TODO: Implement image compositing
+      // This requires overlaying one image on another
+      throw new Error('Image composite operation not yet implemented');
+    });
+`.trim();
+        break;
+
+      default:
+        code = `
+    // Image processing: ${operation}
+    const ${varName} = await step.run("${stepId}", async () => {
+      // TODO: Implement ${operation} operation
+      throw new Error('Image operation "${operation}" not yet implemented');
+    });
+`.trim();
+    }
+
+    context.imports.add('sharp');
+
+    return {
+      additionalImports,
+      steps: [{
+        type: 'run',
+        id: stepId,
+        code,
+        comment: `Image ${operation}: ${node.name}`,
+      }],
+    };
+  },
+};
+
 // Export all integration converters
 export const integrationConverters: NodeConverter[] = [
   supabaseConverter,
@@ -1727,4 +1871,5 @@ export const integrationConverters: NodeConverter[] = [
   itemListsConverter,
   splitInBatchesConverter,
   dateTimeConverter,
+  editImageConverter,
 ];

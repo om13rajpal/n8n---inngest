@@ -59,19 +59,30 @@ export class ConverterRegistry {
  */
 
 /**
- * Generate a safe variable name from node name
+ * Generate a safe variable name from node name (camelCase)
  */
 export function toVariableName(nodeName: string): string {
   return nodeName
-    .replace(/[^a-zA-Z0-9_]/g, '_')
-    .replace(/^(\d)/, '_$1')
-    .replace(/_+/g, '_')
-    .replace(/^_|_$/g, '')
-    .toLowerCase();
+    // Replace non-alphanumeric with spaces for word splitting
+    .replace(/[^a-zA-Z0-9]+/g, ' ')
+    .trim()
+    // Split into words
+    .split(/\s+/)
+    // Convert to camelCase
+    .map((word, index) => {
+      word = word.toLowerCase();
+      if (index === 0) {
+        // First word lowercase, unless it starts with a number
+        return /^\d/.test(word) ? '_' + word : word;
+      }
+      // Capitalize first letter of subsequent words
+      return word.charAt(0).toUpperCase() + word.slice(1);
+    })
+    .join('');
 }
 
 /**
- * Generate a safe step ID from node name
+ * Generate a safe step ID from node name (kebab-case)
  */
 export function toStepId(nodeName: string): string {
   return nodeName
